@@ -1,0 +1,9 @@
+---
+- name: Validate G8825Z5 inventory and source of truth
+  hosts: g8825z5
+  gather_facts: true
+  serial: 8
+  vars_files:
+    - ../group_vars/all/cluster.yml
+  roles:
+    - cluster_preflight

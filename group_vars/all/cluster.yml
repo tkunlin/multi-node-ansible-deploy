@@ -1,0 +1,386 @@
+---
+# G8825Z5 single source of truth
+sku_name: G8825Z5
+target_os: ubuntu-2404
+
+# Desired software versions
+target_rocm: "7.2.3"
+target_nic_bcm: "238.1.138.6a"
+target_nic_amd: "1.117.5-a-38"
+
+# Kernel baseline
+target_kernel: "6.8.0-134-generic"
+disable_unattended_upgrades: true
+kernel_set_grub_default: true
+auto_reboot: false
+
+# Artifact locations
+artifact_root: "{{ inventory_dir }}/../artifacts"
+remote_artifact_dir: /opt/firstboot
+
+# Hardware detection
+broadcom_pci_id: "14e4:1760"
+pensando_pci_id: "1dd8:1002"
+
+# ROCm installer arguments
+rocm_installer_args:
+  - rocm
+  - target=/opt
+  - gpu-access=all
+  - postrocm
+
+# Runtime management network
+runtime_network:
+  interface: ens512np0
+  prefix: 23
+  gateway: 10.99.233.254
+  dns:
+    - 10.88.1.86
+    - 10.88.0.23
+
+# Netplan: omit renderer to use Ubuntu Server/Netplan default backend.
+netplan_renderer: ""
+netplan_mtu: 9000
+network_apply: false
+
+# 8 Pensando rails. name_glob tolerates enpXs0 and enpXs0np0 naming.
+backend_rails:
+  - { slot: 1,  name_glob: "enp102s0*", lane: 0 }
+  - { slot: 2,  name_glob: "enp118s0*", lane: 1 }
+  - { slot: 3,  name_glob: "enp22s0*",  lane: 2 }
+  - { slot: 4,  name_glob: "enp6s0*",   lane: 3 }
+  - { slot: 9,  name_glob: "enp246s0*", lane: 4 }
+  - { slot: 10, name_glob: "enp230s0*", lane: 5 }
+  - { slot: 11, name_glob: "enp134s0*", lane: 6 }
+  - { slot: 12, name_glob: "enp150s0*", lane: 7 }
+
+# Rack-pair backend subnet bases. Each pair owns 8 /24 rails.
+backend_fabric_pairs:
+  1: { racks: [1, 2], subnet_base: 11 }
+  2: { racks: [3, 4], subnet_base: 21 }
+  3: { racks: [5, 6], subnet_base: 31 }
+  4: { racks: [7, 8], subnet_base: 41 }
+
+# Node metadata. provisioning_fe/oob values come from pod_cluster_config.ini.
+# runtime_mgmt_ip is the post-install OS management network.
+cluster_nodes:
+  r1n1:
+    rack: 1
+    node: 1
+    pod_hostname: r1n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DE:B0"
+    provisioning_fe_ip: 
+    oob_mac: "4C:38:D5:22:FD:EB"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.60
+  r1n2:
+    rack: 1
+    node: 2
+    pod_hostname: r1n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:E1:40"
+    provisioning_fe_ip: 
+    oob_mac: "4C:38:D5:22:FD:D9"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.61
+  r1n3:
+    rack: 1
+    node: 3
+    pod_hostname: r1n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DD:90"
+    provisioning_fe_ip: 192.168.254.13
+    oob_mac: "4C:38:D5:22:FD:F1"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.62
+  r1n4:
+    rack: 1
+    node: 4
+    pod_hostname: r1n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DD:10"
+    provisioning_fe_ip: 192.168.254.14
+    oob_mac: "4C:38:D5:23:18:4B"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.63
+  r2n1:
+    rack: 2
+    node: 1
+    pod_hostname: r2n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C6:13:70"
+    provisioning_fe_ip: 192.168.254.21
+    oob_mac: "4C:38:D5:22:FD:D4"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.64
+  r2n2:
+    rack: 2
+    node: 2
+    pod_hostname: r2n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C6:3F:D0"
+    provisioning_fe_ip: 192.168.254.22
+    oob_mac: "4C:38:D5:22:FD:E6"
+    oob_ip:
+    runtime_mgmt_ip: 10.99.232.65
+  r2n3:
+    rack: 2
+    node: 3
+    pod_hostname: r2n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:BD:B0"
+    provisioning_fe_ip: 192.168.254.23
+    oob_mac: "4C:38:D5:22:FD:DC"
+    oob_ip:
+    runtime_mgmt_ip: 10.99.232.66
+  r2n4:
+    rack: 2
+    node: 4
+    pod_hostname: r2n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:FD:70"
+    provisioning_fe_ip: 192.168.254.24
+    oob_mac: "4C:38:D5:22:FD:DB"
+    oob_ip:
+    runtime_mgmt_ip: 10.99.232.67
+  r3n1:
+    rack: 3
+    node: 1
+    pod_hostname: r3n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "8C:84:74:01:6F:3A"
+    provisioning_fe_ip: 192.168.254.31
+    oob_mac: "4C:38:D5:22:FD:E7"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.68
+  r3n2:
+    rack: 3
+    node: 2
+    pod_hostname: r3n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DF:00"
+    provisioning_fe_ip: 192.168.254.32
+    oob_mac: "4C:38:D5:22:FD:E5"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.69
+  r3n3:
+    rack: 3
+    node: 3
+    pod_hostname: r3n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C6:14:90"
+    provisioning_fe_ip: 192.168.254.33
+    oob_mac: "4C:38:D5:22:FD:E2"
+    oob_ip:
+    runtime_mgmt_ip: 10.99.232.70
+  r3n4:
+    rack: 3
+    node: 4
+    pod_hostname: r3n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DC:50"
+    provisioning_fe_ip: 192.168.254.34
+    oob_mac: "4C:38:D5:22:FC:7C"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.71
+  r4n1:
+    rack: 4
+    node: 1
+    pod_hostname: r4n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "8C:84:74:01:75:A2"
+    provisioning_fe_ip: 192.168.254.41
+    oob_mac: "4C:38:D5:22:FD:F0"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.72
+  r4n2:
+    rack: 4
+    node: 2
+    pod_hostname: r4n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:FD:C0"
+    provisioning_fe_ip: 192.168.254.42
+    oob_mac: "4C:38:D5:22:FD:F2"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.73
+  r4n3:
+    rack: 4
+    node: 3
+    pod_hostname: r4n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DE:C0"
+    provisioning_fe_ip: 192.168.254.43
+    oob_mac: "4C:38:D5:23:18:5E"
+    oob_ip:
+    runtime_mgmt_ip: 10.99.232.74
+  r4n4:
+    rack: 4
+    node: 4
+    pod_hostname: r4n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:B8:F0"
+    provisioning_fe_ip: 192.168.254.44
+    oob_mac: "4C:38:D5:22:FD:DE"
+    oob_ip: 
+    runtime_mgmt_ip: 10.99.232.75
+  r5n1:
+    rack: 5
+    node: 1
+    pod_hostname: r5n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DA:30"
+    provisioning_fe_ip: 10.99.232.76
+    oob_mac: "4C:38:D5:22:FD:E0"
+    oob_ip: 10.99.232.161
+    runtime_mgmt_ip: 10.99.232.76
+  r5n2:
+    rack: 5
+    node: 2
+    pod_hostname: r5n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DF:E0"
+    provisioning_fe_ip: 10.99.232.77
+    oob_mac: "4C:38:D5:22:FD:DA"
+    oob_ip: 10.99.232.162
+    runtime_mgmt_ip: 10.99.232.77
+  r5n3:
+    rack: 5
+    node: 3
+    pod_hostname: r5n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:E1:50"
+    provisioning_fe_ip: 10.99.232.78
+    oob_mac: "4C:38:D5:22:FD:E9"
+    oob_ip: 10.99.232.160
+    runtime_mgmt_ip: 10.99.232.78
+  r5n4:
+    rack: 5
+    node: 4
+    pod_hostname: r5n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C6:39:10"
+    provisioning_fe_ip: 10.99.232.79
+    oob_mac: "4C:38:D5:22:FD:EE"
+    oob_ip: 10.99.232.159
+    runtime_mgmt_ip: 10.99.232.79
+  r6n1:
+    rack: 6
+    node: 1
+    pod_hostname: r6n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "8C:84:74:01:7E:12"
+    provisioning_fe_ip: 10.99.232.80
+    oob_mac: "4C:38:D5:23:18:43"
+    oob_ip: 10.99.232.158
+    runtime_mgmt_ip: 10.99.232.80
+  r6n2:
+    rack: 6
+    node: 2
+    pod_hostname: r6n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DE:30"
+    provisioning_fe_ip: 10.99.232.81
+    oob_mac: "4C:38:D5:22:FD:D8"
+    oob_ip: 10.99.232.164
+    runtime_mgmt_ip: 10.99.232.81
+  r6n3:
+    rack: 6
+    node: 3
+    pod_hostname: r6n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:E0:90"
+    provisioning_fe_ip: 10.99.232.82
+    oob_mac: "4C:38:D5:22:FD:E4"
+    oob_ip: 10.99.232.167
+    runtime_mgmt_ip: 10.99.232.82
+  r6n4:
+    rack: 6
+    node: 4
+    pod_hostname: r6n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C6:2E:40"
+    provisioning_fe_ip: 10.99.232.83
+    oob_mac: "4C:38:D5:22:FD:EA"
+    oob_ip: 10.99.232.163
+    runtime_mgmt_ip: 10.99.232.83
+  r7n1:
+    rack: 7
+    node: 1
+    pod_hostname: r7n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:F2:C0"
+    provisioning_fe_ip: 10.99.232.84
+    oob_mac: "4C:38:D5:22:FD:DD"
+    oob_ip: 10.99.232.133
+    runtime_mgmt_ip: 10.99.232.84
+  r7n2:
+    rack: 7
+    node: 2
+    pod_hostname: r7n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DA:60"
+    provisioning_fe_ip: 10.99.232.85
+    oob_mac: "4C:38:D5:22:FD:EC"
+    oob_ip: 10.99.232.142
+    runtime_mgmt_ip: 10.99.232.85
+  r7n3:
+    rack: 7
+    node: 3
+    pod_hostname: r7n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DF:30"
+    provisioning_fe_ip: 10.99.232.86
+    oob_mac: "4C:38:D5:22:FD:DF"
+    oob_ip: 10.99.232.139
+    runtime_mgmt_ip: 10.99.232.86
+  r7n4:
+    rack: 7
+    node: 4
+    pod_hostname: r7n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DA:E0"
+    provisioning_fe_ip: 10.99.232.87
+    oob_mac: "4C:38:D5:22:FD:ED"
+    oob_ip: 10.99.232.138
+    runtime_mgmt_ip: 10.99.232.87
+  r8n1:
+    rack: 8
+    node: 1
+    pod_hostname: r8n1
+    gpu_mode: mi350x
+    provisioning_fe_mac: "6C:83:75:C5:EB:00"
+    provisioning_fe_ip: 10.99.232.88
+    oob_mac: "4C:38:D5:22:FD:EF"
+    oob_ip: 10.99.232.196
+    runtime_mgmt_ip: 10.99.232.88
+  r8n2:
+    rack: 8
+    node: 2
+    pod_hostname: r8n2
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:DB:30"
+    provisioning_fe_ip: 10.99.232.89
+    oob_mac: "4C:38:D5:22:FD:E3"
+    oob_ip: 10.99.232.134
+    runtime_mgmt_ip: 10.99.232.89
+  r8n3:
+    rack: 8
+    node: 3
+    pod_hostname: r8n3
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:E0:10"
+    provisioning_fe_ip: 10.99.232.90
+    oob_mac: "4C:38:D5:22:FD:D5"
+    oob_ip: 10.99.232.136
+    runtime_mgmt_ip: 10.99.232.90
+  r8n4:
+    rack: 8
+    node: 4
+    pod_hostname: r8n4
+    gpu_mode: mi350x
+    provisioning_fe_mac: "40:5B:7F:6D:E0:50"
+    provisioning_fe_ip: 10.99.232.91
+    oob_mac: "4C:38:D5:22:FD:E8"
+    oob_ip: 10.99.232.157
+    runtime_mgmt_ip: 10.99.232.91

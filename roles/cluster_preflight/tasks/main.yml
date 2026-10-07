@@ -1,0 +1,22 @@
+---
+- name: Validate host exists in source of truth
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname in cluster_nodes
+      - cluster_nodes[inventory_hostname].rack is defined
+      - cluster_nodes[inventory_hostname].node is defined
+      - cluster_nodes[inventory_hostname].runtime_mgmt_ip is defined
+      - cluster_nodes[inventory_hostname].provisioning_fe_ip is defined
+      - cluster_nodes[inventory_hostname].oob_ip is defined
+    fail_msg: "Incomplete cluster_nodes entry for {{ inventory_hostname }}"
+
+- name: Verify hostname matches inventory name
+  ansible.builtin.command: hostname -s
+  register: hostname_s
+  changed_when: false
+
+- name: Assert hostname
+  ansible.builtin.assert:
+    that:
+      - hostname_s.stdout | lower == inventory_hostname | lower
+    fail_msg: "Hostname mismatch inventory={{ inventory_hostname }} actual={{ hostname_s.stdout }}"

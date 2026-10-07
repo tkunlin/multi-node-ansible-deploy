@@ -1,0 +1,110 @@
+---
+- name: Verify Ubuntu family before kernel baseline
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+      - ansible_facts.distribution == "Ubuntu"
+    fail_msg: "kernel_baseline currently supports Ubuntu only"
+
+- name: Derive target kernel package ABI
+  ansible.builtin.set_fact:
+    target_kernel_abi: "{{ target_kernel | regex_replace('-generic$', '') }}"
+
+- name: Install target kernel packages
+  ansible.builtin.apt:
+    name:
+      - "linux-image-{{ target_kernel }}"
+      - "linux-headers-{{ target_kernel }}"
+      - "linux-modules-{{ target_kernel }}"
+      - "linux-modules-extra-{{ target_kernel }}"
+    state: present
+    update_cache: true
+
+- name: Disable APT periodic/unattended upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "0";
+      APT::Periodic::Unattended-Upgrade "0";
+      APT::Periodic::Download-Upgradeable-Packages "0";
+      APT::Periodic::AutocleanInterval "0";
+  when: disable_unattended_upgrades | bool
+
+- name: Disable APT timers and unattended-upgrades service
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+    - unattended-upgrades.service
+  failed_when: false
+  when: disable_unattended_upgrades | bool
+
+- name: Hold installed kernel meta packages
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for pkg in linux-generic linux-image-generic linux-headers-generic linux-generic-hwe-24.04 linux-image-generic-hwe-24.04 linux-headers-generic-hwe-24.04; do
+      if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed'; then
+        apt-mark hold "$pkg"
+      fi
+    done
+  args:
+    executable: /bin/bash
+  register: kernel_hold_result
+  changed_when: "'set on hold' in kernel_hold_result.stdout"
+
+- name: Hold target ABI packages
+  ansible.builtin.command:
+    argv:
+      - apt-mark
+      - hold
+      - "linux-image-{{ target_kernel }}"
+      - "linux-headers-{{ target_kernel }}"
+      - "linux-modules-{{ target_kernel }}"
+      - "linux-modules-extra-{{ target_kernel }}"
+  register: target_kernel_hold
+  changed_when: "'set on hold' in target_kernel_hold.stdout"
+
+- name: Configure GRUB default target kernel
+  ansible.builtin.copy:
+    dest: /etc/default/grub.d/99-g8825z5-kernel.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      GRUB_DEFAULT="Advanced options for Ubuntu>Ubuntu, with Linux {{ target_kernel }}"
+  register: grub_kernel_cfg
+  when: kernel_set_grub_default | bool
+
+- name: Update GRUB
+  ansible.builtin.command: update-grub
+  when:
+    - kernel_set_grub_default | bool
+    - grub_kernel_cfg.changed
+
+- name: Verify target kernel image exists
+  ansible.builtin.stat:
+    path: "/boot/vmlinuz-{{ target_kernel }}"
+  register: target_kernel_image
+
+- name: Assert target kernel image exists
+  ansible.builtin.assert:
+    that:
+      - target_kernel_image.stat.exists
+    fail_msg: "Target kernel /boot/vmlinuz-{{ target_kernel }} is missing"
+
+- name: Report current versus target kernel
+  ansible.builtin.debug:
+    msg: "running={{ ansible_kernel }}, target={{ target_kernel }}, reboot_required={{ ansible_kernel != target_kernel }}"
+
+- name: Reboot only when explicitly enabled and target is not running
+  ansible.builtin.reboot:
+    reboot_timeout: 900
+  when:
+    - auto_reboot | bool
+    - ansible_kernel != target_kernel

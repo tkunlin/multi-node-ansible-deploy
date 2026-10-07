@@ -1,0 +1,39 @@
+---
+# ============================================================
+# Software artifact catalog
+# Version -> exact filename / extracted directory mapping.
+# Add a new version here without changing role implementation.
+# ============================================================
+
+software_catalog:
+  rocm:
+    ubuntu-2404:
+      "7.2.3":
+        filename: rocm-installer_1.2.8.70203-61-90~24.04.run
+        remote_filename: rocm-installer.run
+        sha256: ""
+    ubuntu-2204:
+      "7.2.3":
+        filename: rocm-installer_1.2.8.70203-61-90~22.04.run
+        remote_filename: rocm-installer.run
+        sha256: ""
+
+  broadcom:
+    "238.1.138.6a":
+      filename: bcm_238.1.138.6a.tar.gz
+      extracted_dir: bcm_238.1.138.6a
+      sha256: ""
+    "236.1.155.0c":
+      filename: bcm_236.1.155.0c.tar.gz
+      extracted_dir: bcm_236.1.155.0c
+      sha256: ""
+
+  pensando:
+    "1.117.5-a-38":
+      filename: ainic_bundle_1.117.5-a-38.tar.gz
+      extracted_dir: ainic_bundle_1.117.5-a-38
+      sha256: ""
+    "1.117.5-a-77":
+      filename: ainic_bundle_1.117.5-a-77.tar.gz
+      extracted_dir: ainic_bundle_1.117.5-a-77
+      sha256: ""

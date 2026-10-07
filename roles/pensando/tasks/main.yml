@@ -1,0 +1,99 @@
+---
+- name: Resolve Pensando artifact when role runs independently
+  ansible.builtin.set_fact:
+    selected_pensando: "{{ software_catalog.pensando[target_nic_amd] }}"
+  when: selected_pensando is not defined
+
+- name: Detect AMD Pensando NIC
+  ansible.builtin.shell: "set -o pipefail && lspci -nn | grep -i '{{ pensando_pci_id }}'"
+  args:
+    executable: /bin/bash
+  register: pensando_detect
+  changed_when: false
+  failed_when: false
+
+- name: Skip Pensando install when NIC is absent
+  ansible.builtin.debug:
+    msg: "AMD Pensando NIC {{ pensando_pci_id }} not detected; skipping Pensando role."
+  when: pensando_detect.rc != 0
+
+- name: Install AMD Pensando driver
+  when: pensando_detect.rc == 0
+  block:
+    - name: Ensure remote artifact directory exists
+      ansible.builtin.file:
+        path: "{{ remote_artifact_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy Pensando bundle
+      ansible.builtin.copy:
+        src: "{{ artifact_root }}/pensando/{{ selected_pensando.filename }}"
+        dest: "{{ remote_artifact_dir }}/{{ selected_pensando.filename }}"
+        mode: "0644"
+
+    - name: Remove previous Pensando extraction directory
+      ansible.builtin.file:
+        path: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}"
+        state: absent
+
+    - name: Extract Pensando bundle
+      ansible.builtin.unarchive:
+        src: "{{ remote_artifact_dir }}/{{ selected_pensando.filename }}"
+        dest: "{{ remote_artifact_dir }}"
+        remote_src: true
+
+    - name: Verify Pensando host software package exists
+      ansible.builtin.stat:
+        path: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg.tar.gz"
+      register: pensando_host_pkg
+
+    - name: Assert Pensando host software package exists
+      ansible.builtin.assert:
+        that:
+          - pensando_host_pkg.stat.exists
+        fail_msg: >-
+          host_sw_pkg.tar.gz not found under
+          {{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}
+
+    - name: Extract Pensando host software package
+      ansible.builtin.unarchive:
+        src: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg.tar.gz"
+        dest: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}"
+        remote_src: true
+
+    - name: Install Pensando host software
+      ansible.builtin.command:
+        argv:
+          - bash
+          - install.sh
+          - -y
+      args:
+        chdir: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg"
+      register: pensando_install
+
+    - name: Extract Pensando RDMA/perftest source package
+      ansible.builtin.unarchive:
+        src: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg/ionic_driver/src/drivers-linux.tar.xz"
+        dest: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg/ionic_driver/src"
+        remote_src: true
+
+    - name: Configure Pensando perftest build
+      ansible.builtin.shell: |
+        set -euo pipefail
+        bash autogen.sh
+        bash configure --prefix=/usr --enable-rocm --with-rocm=/opt/rocm
+      args:
+        executable: /bin/bash
+        chdir: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg/ionic_driver/src/drivers-linux/perftest"
+      changed_when: true
+
+    - name: Build Pensando perftest
+      ansible.builtin.command: make -j{{ ansible_facts.processor_vcpus | default(4) }}
+      args:
+        chdir: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg/ionic_driver/src/drivers-linux/perftest"
+
+    - name: Install Pensando perftest
+      ansible.builtin.command: make install
+      args:
+        chdir: "{{ remote_artifact_dir }}/{{ selected_pensando.extracted_dir }}/host_sw_pkg/ionic_driver/src/drivers-linux/perftest"

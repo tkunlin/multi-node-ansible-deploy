@@ -1,0 +1,111 @@
+---
+- name: Set default preflight component scope
+  ansible.builtin.set_fact:
+    preflight_components_effective: "{{ preflight_components | default(['rocm', 'broadcom', 'pensando']) }}"
+
+- name: Validate selected ROCm version exists in software catalog
+  ansible.builtin.assert:
+    that:
+      - target_os in software_catalog.rocm
+      - target_rocm in software_catalog.rocm[target_os]
+    fail_msg: >-
+      Unsupported ROCm selection: OS={{ target_os }}, ROCm={{ target_rocm }}.
+      Check group_vars/all/cluster.yml and vars/software_catalog.yml.
+  when: "'rocm' in preflight_components_effective"
+  run_once: true
+
+- name: Validate selected Broadcom version exists in software catalog
+  ansible.builtin.assert:
+    that:
+      - target_nic_bcm in software_catalog.broadcom
+    fail_msg: >-
+      Unsupported Broadcom selection: {{ target_nic_bcm }}.
+      Check group_vars/all/cluster.yml and vars/software_catalog.yml.
+  when: "'broadcom' in preflight_components_effective"
+  run_once: true
+
+- name: Validate selected Pensando version exists in software catalog
+  ansible.builtin.assert:
+    that:
+      - target_nic_amd in software_catalog.pensando
+    fail_msg: >-
+      Unsupported Pensando selection: {{ target_nic_amd }}.
+      Check group_vars/all/cluster.yml and vars/software_catalog.yml.
+  when: "'pensando' in preflight_components_effective"
+  run_once: true
+
+- name: Resolve selected ROCm artifact
+  ansible.builtin.set_fact:
+    selected_rocm: "{{ software_catalog.rocm[target_os][target_rocm] }}"
+  when: "'rocm' in preflight_components_effective"
+
+- name: Resolve selected Broadcom artifact
+  ansible.builtin.set_fact:
+    selected_broadcom: "{{ software_catalog.broadcom[target_nic_bcm] }}"
+  when: "'broadcom' in preflight_components_effective"
+
+- name: Resolve selected Pensando artifact
+  ansible.builtin.set_fact:
+    selected_pensando: "{{ software_catalog.pensando[target_nic_amd] }}"
+  when: "'pensando' in preflight_components_effective"
+
+- name: Build artifact check list
+  ansible.builtin.set_fact:
+    artifact_check_list: >-
+      {{
+        ([{'component': 'rocm', 'name': 'ROCm', 'path': artifact_root ~ '/rocm/' ~ selected_rocm.filename,
+            'expected': selected_rocm.sha256 | default('')}] if 'rocm' in preflight_components_effective else [])
+        + ([{'component': 'broadcom', 'name': 'Broadcom', 'path': artifact_root ~ '/broadcom/' ~ selected_broadcom.filename,
+            'expected': selected_broadcom.sha256 | default('')}] if 'broadcom' in preflight_components_effective else [])
+        + ([{'component': 'pensando', 'name': 'Pensando', 'path': artifact_root ~ '/pensando/' ~ selected_pensando.filename,
+            'expected': selected_pensando.sha256 | default('')}] if 'pensando' in preflight_components_effective else [])
+      }}
+  run_once: true
+
+- name: Check required artifact files on Ansible controller
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+    checksum_algorithm: sha256
+  loop: "{{ artifact_check_list }}"
+  loop_control:
+    label: "{{ item.name }}: {{ item.path }}"
+  register: artifact_stats
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Fail when a required artifact is missing
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: "Missing required artifact: {{ item.item.path }}"
+  loop: "{{ artifact_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Validate SHA256 when catalog checksum is defined
+  ansible.builtin.assert:
+    that:
+      - item.stat.checksum == item.item.expected
+    fail_msg: >-
+      SHA256 mismatch for {{ item.item.name }}: expected={{ item.item.expected }},
+      actual={{ item.stat.checksum | default('') }}
+  when: item.item.expected | length > 0
+  loop: "{{ artifact_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: Show resolved deployment artifacts
+  ansible.builtin.debug:
+    msg: "{{ item.item.name }} -> {{ item.item.path }}"
+  loop: "{{ artifact_stats.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  run_once: true

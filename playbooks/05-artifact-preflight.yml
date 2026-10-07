@@ -1,0 +1,11 @@
+---
+- name: Validate selected software artifacts
+  hosts: g8825z5
+  gather_facts: false
+  vars:
+    preflight_components: [rocm, broadcom, pensando]
+  vars_files:
+    - ../group_vars/all/cluster.yml
+    - ../vars/software_catalog.yml
+  roles:
+    - artifact_preflight

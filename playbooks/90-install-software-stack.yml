@@ -1,0 +1,23 @@
+---
+- name: Install G8825Z5 software stack
+  hosts: g8825z5
+  become: true
+  gather_facts: true
+  # Start conservatively. Increase after validation on one node.
+  serial: 1
+  vars:
+    preflight_components:
+      - rocm
+      - broadcom
+      - pensando
+  vars_files:
+    - ../group_vars/all/cluster.yml
+    - ../vars/software_catalog.yml
+  pre_tasks:
+    - name: Run artifact preflight
+      ansible.builtin.include_role:
+        name: artifact_preflight
+  roles:
+    - rocm
+    - broadcom
+    - pensando

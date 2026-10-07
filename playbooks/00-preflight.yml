@@ -1,0 +1,3 @@
+---
+- import_playbook: 00-cluster-preflight.yml
+- import_playbook: 05-artifact-preflight.yml

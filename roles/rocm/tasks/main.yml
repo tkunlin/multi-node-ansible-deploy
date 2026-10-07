@@ -1,0 +1,32 @@
+---
+- name: Resolve ROCm artifact when role runs independently
+  ansible.builtin.set_fact:
+    selected_rocm: "{{ software_catalog.rocm[target_os][target_rocm] }}"
+  when: selected_rocm is not defined
+
+- name: Ensure remote artifact directory exists
+  ansible.builtin.file:
+    path: "{{ remote_artifact_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Copy ROCm installer to node
+  ansible.builtin.copy:
+    src: "{{ artifact_root }}/rocm/{{ selected_rocm.filename }}"
+    dest: "{{ remote_artifact_dir }}/{{ selected_rocm.remote_filename }}"
+    mode: "0755"
+
+- name: Install ROCm {{ target_rocm }}
+  ansible.builtin.command:
+    argv: "{{ [remote_artifact_dir ~ '/' ~ selected_rocm.remote_filename] + rocm_installer_args }}"
+  register: rocm_install_result
+  changed_when: rocm_install_result.rc == 0
+
+- name: Verify rocminfo command exists
+  ansible.builtin.command: bash -lc 'command -v rocminfo || command -v /opt/rocm/bin/rocminfo'
+  register: rocminfo_cmd
+  changed_when: false
+
+- name: Show ROCm install verification
+  ansible.builtin.debug:
+    var: rocminfo_cmd.stdout

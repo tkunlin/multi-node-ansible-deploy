@@ -1,0 +1,12 @@
+# Large/offline deployment artifacts
+artifacts/**/*.run
+artifacts/**/*.tar
+artifacts/**/*.tar.gz
+artifacts/**/*.tar.bz2
+artifacts/**/*.tar.xz
+artifacts/**/*.deb
+artifacts/**/*.iso
+
+# Ansible local files
+*.retry
+.vault_pass

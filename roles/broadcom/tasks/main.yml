@@ -1,0 +1,90 @@
+---
+- name: Resolve Broadcom artifact when role runs independently
+  ansible.builtin.set_fact:
+    selected_broadcom: "{{ software_catalog.broadcom[target_nic_bcm] }}"
+  when: selected_broadcom is not defined
+
+- name: Detect Broadcom NIC
+  ansible.builtin.shell: "set -o pipefail && lspci -nn | grep -i '{{ broadcom_pci_id }}'"
+  args:
+    executable: /bin/bash
+  register: broadcom_detect
+  changed_when: false
+  failed_when: false
+
+- name: Skip Broadcom install when NIC is absent
+  ansible.builtin.debug:
+    msg: "Broadcom NIC {{ broadcom_pci_id }} not detected; skipping Broadcom role."
+  when: broadcom_detect.rc != 0
+
+- name: Install Broadcom driver
+  when: broadcom_detect.rc == 0
+  block:
+    - name: Ensure remote artifact directory exists
+      ansible.builtin.file:
+        path: "{{ remote_artifact_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy Broadcom driver bundle
+      ansible.builtin.copy:
+        src: "{{ artifact_root }}/broadcom/{{ selected_broadcom.filename }}"
+        dest: "{{ remote_artifact_dir }}/{{ selected_broadcom.filename }}"
+        mode: "0644"
+
+    - name: Recreate Broadcom extraction directory
+      ansible.builtin.file:
+        path: "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}"
+        state: absent
+
+    - name: Create Broadcom extraction directory
+      ansible.builtin.file:
+        path: "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Extract Broadcom bundle
+      ansible.builtin.unarchive:
+        src: "{{ remote_artifact_dir }}/{{ selected_broadcom.filename }}"
+        dest: "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}"
+        remote_src: true
+        extra_opts:
+          - --strip-components=1
+
+    - name: Verify Broadcom nic_wizard exists
+      ansible.builtin.stat:
+        path: "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}/utils/nic_wizard/nic_wizard"
+      register: bcm_wizard
+
+    - name: Assert Broadcom nic_wizard exists
+      ansible.builtin.assert:
+        that:
+          - bcm_wizard.stat.exists
+        fail_msg: >-
+          nic_wizard not found under extracted Broadcom bundle:
+          {{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}/utils/nic_wizard/nic_wizard
+
+    - name: Install Broadcom NIC driver without firmware update
+      ansible.builtin.command:
+        argv:
+          - "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}/utils/nic_wizard/nic_wizard"
+          - installer
+          - install
+          - -v
+          - -g
+          - -N
+      args:
+        chdir: "{{ remote_artifact_dir }}/{{ selected_broadcom.extracted_dir }}/utils/nic_wizard"
+      register: bcm_install
+
+    - name: Blacklist in-kernel bnxt_en module as required by original deployment
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/blacklist-bnxt.conf
+        content: "blacklist bnxt_en\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Update Ubuntu initramfs
+      ansible.builtin.command: "update-initramfs -u -k {{ ansible_kernel }}"
+      when: ansible_facts.os_family == 'Debian'

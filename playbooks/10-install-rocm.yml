@@ -1,0 +1,18 @@
+---
+- name: Install selected ROCm version
+  hosts: g8825z5
+  become: true
+  gather_facts: true
+  serial: 1
+  vars:
+    preflight_components:
+      - rocm
+  vars_files:
+    - ../group_vars/all/cluster.yml
+    - ../vars/software_catalog.yml
+  pre_tasks:
+    - name: Run artifact preflight
+      ansible.builtin.include_role:
+        name: artifact_preflight
+  roles:
+    - rocm

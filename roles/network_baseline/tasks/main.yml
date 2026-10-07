@@ -1,0 +1,69 @@
+---
+- name: Verify current host exists in cluster source of truth
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname in cluster_nodes
+    fail_msg: "{{ inventory_hostname }} is missing from cluster_nodes in group_vars/all/cluster.yml"
+
+- name: Resolve node metadata
+  ansible.builtin.set_fact:
+    node_cfg: "{{ cluster_nodes[inventory_hostname] }}"
+    rack_pair_id: "{{ ((cluster_nodes[inventory_hostname].rack | int - 1) // 2) + 1 }}"
+    backend_host_octet: "{{ (cluster_nodes[inventory_hostname].node | int) + (4 if (cluster_nodes[inventory_hostname].rack | int) % 2 == 0 else 0) }}"
+
+- name: Resolve rack-pair fabric metadata
+  ansible.builtin.set_fact:
+    fabric_cfg: "{{ backend_fabric_pairs[rack_pair_id | int] }}"
+
+- name: Verify management interface exists
+  ansible.builtin.command: "ip -o link show {{ runtime_network.interface }}"
+  register: mgmt_link
+  changed_when: false
+
+- name: Verify all Pensando rail interface globs resolve exactly once
+  ansible.builtin.shell: |
+    set -euo pipefail
+    shopt -s nullglob
+    matches=(/sys/class/net/{{ item.name_glob }})
+    if [ "${#matches[@]}" -ne 1 ]; then
+      echo "pattern={{ item.name_glob }} matches=${#matches[@]}: ${matches[*]:-none}"
+      exit 1
+    fi
+    basename "${matches[0]}"
+  args:
+    executable: /bin/bash
+  loop: "{{ backend_rails }}"
+  loop_control:
+    label: "slot S{{ item.slot }} -> {{ item.name_glob }}"
+  register: rail_interface_resolution
+  changed_when: false
+
+- name: Build resolved physical rail names
+  ansible.builtin.set_fact:
+    resolved_backend_rails: >-
+      {{ resolved_backend_rails | default([]) + [ item.item | combine({'physical_name': item.stdout}) ] }}
+  loop: "{{ rail_interface_resolution.results }}"
+
+- name: Render G8825Z5 Netplan
+  ansible.builtin.template:
+    src: 60-g8825z5.yaml.j2
+    dest: /etc/netplan/60-g8825z5.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  register: netplan_render
+
+- name: Validate Netplan syntax
+  ansible.builtin.command: netplan generate
+  changed_when: false
+
+- name: Show rendered Netplan path and apply state
+  ansible.builtin.debug:
+    msg: "/etc/netplan/60-g8825z5.yaml validated; network_apply={{ network_apply }}"
+
+- name: Apply Netplan only when explicitly enabled
+  ansible.builtin.command: netplan apply
+  when:
+    - network_apply | bool
+    - netplan_render.changed
