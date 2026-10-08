@@ -1,4 +1,4 @@
-# G8825Z5 Ansible Deployment v0.3.1
+# multi-nodes Ansible Deployment v0.3.1
 
 ## v0.3.1 path repair
 
